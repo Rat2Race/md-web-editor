@@ -100,6 +100,22 @@ describe("pane surface", () => {
     expect(host.parentElement?.getAttribute("aria-labelledby")).toBe(tab.id);
   });
 
+  it("keeps focus inside the active editor when rendering after an edit", () => {
+    const value = subject();
+    const active = value.layout.group()?.active;
+    const host = active ? value.content.get(active) : undefined;
+    if (!active || !host) throw new Error("Test active host is missing.");
+    host.dataset["viewId"] = active;
+    const editor = document.createElement("div");
+    editor.tabIndex = 0;
+    host.append(editor);
+
+    editor.focus();
+    value.surface.render();
+
+    expect(document.activeElement).toBe(editor);
+  });
+
   it("moves an internal drag to the destination tab strip without DataTransfer note data", () => {
     const value = subject();
     const source = document.querySelector<HTMLElement>('[data-pane-tab="a"]');

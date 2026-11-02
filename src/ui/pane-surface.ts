@@ -155,17 +155,19 @@ export function createPaneSurface(options: PaneSurfaceOptions): {
     select.onchange = () => options.actions.focus(select.value);
     const root = nodeDom(options.layout.root);
     if (tree.firstElementChild !== root) tree.replaceChildren(root);
-    const nextFocus =
+    const keepFocus =
       focused?.isConnected &&
       focusedGroup === options.layout.activeGroup &&
-      (!focusedTab || options.layout.group()?.active === focusedTab) &&
-      document.activeElement !== focused
-        ? focused
-        : focusWasInSurface
-          ? surface.querySelector<HTMLElement>(
-              ".pane-group.is-focused [role=tab][aria-selected=true], .pane-group.is-focused .pane-empty button",
-            )
-          : undefined;
+      (!focusedTab || options.layout.group()?.active === focusedTab);
+    const nextFocus = keepFocus
+      ? document.activeElement === focused
+        ? undefined
+        : focused
+      : focusWasInSurface
+        ? surface.querySelector<HTMLElement>(
+            ".pane-group.is-focused [role=tab][aria-selected=true], .pane-group.is-focused .pane-empty button",
+          )
+        : undefined;
     if (nextFocus) {
       restoringFocus = true;
       nextFocus.focus({ preventScroll: true });
