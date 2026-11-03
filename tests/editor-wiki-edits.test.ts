@@ -51,4 +51,18 @@ describe("wiki edit canonicalization", () => {
       { from, to: from + "[[report]]".length, insert: "[[/docs/report.pdf|report]]" },
     ]);
   });
+
+  it("skips parsing a 1 MB note when the keystroke touches no wiki link", () => {
+    const paragraph = "Some text with a [[link]] and `code` and **bold** words here.\n\n";
+    const content = paragraph.repeat(Math.ceil((1024 * 1024) / paragraph.length));
+    const started = performance.now();
+    for (let i = 0; i < 5; i += 1)
+      canonicalWikiEdits({
+        content,
+        source: "a.md",
+        paths: [],
+        changed: [{ from: 5, to: 6 }],
+      });
+    expect((performance.now() - started) / 5).toBeLessThan(100);
+  });
 });

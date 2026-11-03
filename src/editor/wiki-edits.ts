@@ -123,32 +123,33 @@ function contains(container: SyntaxRange, range: SyntaxRange): boolean {
   return container.from <= range.from && container.to >= range.to;
 }
 
-function wikiMatches(content: string): readonly WikiMatch[] {
-  const syntax = syntaxRanges(content);
-  const matches: WikiMatch[] = [];
-  for (const match of content.matchAll(/!?\[\[([^\]\n]+)\]\]/gu)) {
-    const from = (match.index ?? 0) + (match[0]?.startsWith("!") ? 1 : 0);
-    const to = from + (match[0]?.length ?? 0) - (match[0]?.startsWith("!") ? 1 : 0);
-    const range = { from, to };
-    if (syntax.excluded.some((item) => overlaps(item, range))) continue;
-    if (syntax.containers.some((item) => contains(item, range))) continue;
-    const value = match[1] ?? "";
-    if (value) matches.push({ ...range, value });
-  }
-  return matches;
-}
-
 function changed(match: WikiEditRange, ranges: readonly WikiEditRange[]): boolean {
   return ranges.some((range) => range.from < match.to && range.to > match.from);
 }
 
+// The regex pass is cheap; the full Markdown parse runs only when an edit touched a wiki link.
+function wikiMatches(content: string, edited: readonly WikiEditRange[]): readonly WikiMatch[] {
+  const matches: WikiMatch[] = [];
+  for (const match of content.matchAll(/!?\[\[([^\]\n]+)\]\]/gu)) {
+    const from = (match.index ?? 0) + (match[0]?.startsWith("!") ? 1 : 0);
+    const to = from + (match[0]?.length ?? 0) - (match[0]?.startsWith("!") ? 1 : 0);
+    const value = match[1] ?? "";
+    if (value && changed({ from, to }, edited)) matches.push({ from, to, value });
+  }
+  if (!matches.length) return matches;
+  const syntax = syntaxRanges(content);
+  return matches.filter(
+    (range) =>
+      !syntax.excluded.some((item) => overlaps(item, range)) &&
+      !syntax.containers.some((item) => contains(item, range)),
+  );
+}
+
 export function canonicalWikiEdits(options: WikiEditOptions): readonly WikiEdit[] {
-  return wikiMatches(options.content)
-    .filter((match) => changed(match, options.changed))
-    .flatMap((match) => {
-      const content = typedWikiLinkContent(options.source, match.value, options.paths);
-      return content && content !== match.value
-        ? [{ from: match.from, to: match.to, insert: `[[${content}]]` }]
-        : [];
-    });
+  return wikiMatches(options.content, options.changed).flatMap((match) => {
+    const content = typedWikiLinkContent(options.source, match.value, options.paths);
+    return content && content !== match.value
+      ? [{ from: match.from, to: match.to, insert: `[[${content}]]` }]
+      : [];
+  });
 }
