@@ -101,6 +101,22 @@ describe("vault link resolution", () => {
       { target: "/report%5Bfinal%5D.txt", label: "report[final].txt", kind: "wiki" },
     ]);
   });
+
+  it("lists case-insensitive extension matches in vault order", () => {
+    expect(resolveLink("x.md", "notes/Plan", ["notes/plan.markdown", "notes/PLAN.md"])).toEqual({
+      kind: "ambiguous",
+      paths: ["notes/plan.markdown", "notes/PLAN.md"],
+    });
+  });
+
+  it("resolves 20,000 links across 2,000 notes within a second", () => {
+    const paths = Array.from({ length: 2000 }, (_, i) => `folder${i % 20}/note ${i}.md`);
+    const started = performance.now();
+    for (const [i, source] of paths.entries())
+      for (let k = 0; k < 10; k += 1)
+        resolveLink(source, `note ${(i * 7 + k * 13) % 2000}`, paths, "wiki");
+    expect(performance.now() - started).toBeLessThan(1000);
+  }, 30_000);
 });
 
 describe("Markdown parser context", () => {

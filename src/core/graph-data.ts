@@ -2,20 +2,23 @@ import { indexDocument, resolveLink } from "../editor/markdown";
 import type { GraphData, GraphEdge, GraphNode, Note, VaultEntry } from "./types";
 export function buildGraph(notes: readonly Note[], entries: readonly VaultEntry[]): GraphData {
   const paths = entries.map((e) => e.path);
+  const byPath = new Map(entries.map((e) => [e.path, e]));
+  const indexes = notes.map((note) => indexDocument(note.content));
   const nodes = new Map<string, GraphNode>();
   const edges: GraphEdge[] = [];
-  for (const note of notes) {
-    const index = indexDocument(note.content);
+  for (const [i, note] of notes.entries()) {
     nodes.set(note.path, {
       id: note.path,
       label: note.path.replace(/^.*\//, "").replace(/\.markdown$|\.md$/i, ""),
       kind: "note",
-      tags: index.tags,
-      modified: entries.find((e) => e.path === note.path)?.modified ?? 0,
+      tags: indexes[i]?.tags ?? [],
+      modified: byPath.get(note.path)?.modified ?? 0,
     });
   }
-  for (const note of notes) {
-    const index = indexDocument(note.content);
+  for (const [i, note] of notes.entries()) {
+    const index = indexes[i];
+    if (!index) continue;
+    const linked = new Set<string>();
     for (const link of index.links) {
       const resolved = resolveLink(note.path, link.target, paths, link.kind);
       if (resolved.kind === "ambiguous") {
@@ -28,13 +31,13 @@ export function buildGraph(notes: readonly Note[], entries: readonly VaultEntry[
           modified: 0,
           candidates: resolved.paths,
         });
-        if (!edges.some((edge) => edge.source === note.path && edge.target === id))
-          edges.push({ source: note.path, target: id });
+        if (!linked.has(id)) edges.push({ source: note.path, target: id });
+        linked.add(id);
         continue;
       }
       if (resolved.kind !== "note" && resolved.kind !== "missing") continue;
       const path = resolved.path;
-      const entry = entries.find((e) => e.path === path);
+      const entry = byPath.get(path);
       if (!nodes.has(path))
         nodes.set(path, {
           id: path,
@@ -43,8 +46,8 @@ export function buildGraph(notes: readonly Note[], entries: readonly VaultEntry[
           tags: [],
           modified: entry?.modified ?? 0,
         });
-      if (path !== note.path && !edges.some((e) => e.source === note.path && e.target === path))
-        edges.push({ source: note.path, target: path });
+      if (path !== note.path && !linked.has(path)) edges.push({ source: note.path, target: path });
+      linked.add(path);
     }
     for (const tag of index.tags) {
       const id = `#${tag.replace(/^#/, "")}`;

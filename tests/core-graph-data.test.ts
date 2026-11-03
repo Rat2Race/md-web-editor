@@ -26,4 +26,19 @@ describe("graph link resolution", () => {
     expect(unresolved?.candidates).toEqual(["a/same.md", "b/same.md"]);
     expect(graph.edges).toEqual([{ source: "source.md", target: unresolved?.id }]);
   });
+  it("builds a 5,000-note graph within a second", () => {
+    const notes: Note[] = Array.from({ length: 5000 }, (_, i) => ({
+      path: `folder${i % 20}/note ${i}.md`,
+      content: `# Note ${i}\n\n${Array.from({ length: 10 }, (_, k) => `- [[note ${(i * 7 + k * 13) % 5000}]]`).join("\n")}\n\n#tag${i % 30}\n`,
+    }));
+    const entries: VaultEntry[] = notes.map((note) => ({
+      path: note.path,
+      kind: "note",
+      modified: 1,
+    }));
+    const started = performance.now();
+    const graph = buildGraph(notes, entries);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(graph.edges.length).toBeGreaterThan(5000);
+  }, 30_000);
 });

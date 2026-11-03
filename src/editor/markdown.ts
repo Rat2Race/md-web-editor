@@ -183,15 +183,43 @@ export function directory(path: string): string {
   return slash < 0 ? "" : path.slice(0, slash + 1);
 }
 
+type PathIndex = {
+  readonly exact: ReadonlySet<string>;
+  readonly lower: ReadonlyMap<string, readonly number[]>;
+  readonly names: ReadonlyMap<string, readonly string[]>;
+};
+
+// Callers pass a fresh array whenever the vault changes, so the array identity is the cache key.
+const pathIndexes = new WeakMap<readonly string[], PathIndex>();
+
+const noteName = (path: string): string =>
+  path.replace(/^.*\//u, "").replace(/\.(md|markdown)$/iu, "");
+
+function pathIndex(paths: readonly string[]): PathIndex {
+  const cached = pathIndexes.get(paths);
+  if (cached) return cached;
+  const lower = new Map<string, number[]>();
+  const names = new Map<string, string[]>();
+  for (const [position, path] of paths.entries()) {
+    const key = path.toLocaleLowerCase();
+    const name = noteName(path);
+    lower.get(key)?.push(position) ?? lower.set(key, [position]);
+    names.get(name)?.push(path) ?? names.set(name, [path]);
+  }
+  const index = { exact: new Set(paths), lower, names };
+  pathIndexes.set(paths, index);
+  return index;
+}
+
 function candidates(path: string, paths: readonly string[]): readonly string[] {
-  const exact = paths.filter((entry) => entry === path);
-  if (exact.length) return exact;
+  const index = pathIndex(paths);
+  if (index.exact.has(path)) return [path];
   if (/\.(md|markdown)$/iu.test(path)) return [];
-  return paths.filter(
-    (entry) =>
-      entry.toLocaleLowerCase() === `${path}.md`.toLocaleLowerCase() ||
-      entry.toLocaleLowerCase() === `${path}.markdown`.toLocaleLowerCase(),
-  );
+  const positions = [
+    ...(index.lower.get(`${path}.md`.toLocaleLowerCase()) ?? []),
+    ...(index.lower.get(`${path}.markdown`.toLocaleLowerCase()) ?? []),
+  ];
+  return positions.sort((a, b) => a - b).flatMap((position) => paths[position] ?? []);
 }
 
 function missingPath(path: string): string {
@@ -246,10 +274,7 @@ export function resolveLink(
         : directMatches;
   if (matches.length === 1 && matches[0]) return { kind: "note", path: matches[0], anchor };
   if (matches.length > 1) return { kind: "ambiguous", paths: matches };
-  const basename = (direct ?? relative).replace(/^.*\//u, "").replace(/\.(md|markdown)$/iu, "");
-  const names = paths.filter(
-    (entry) => entry.replace(/^.*\//u, "").replace(/\.(md|markdown)$/iu, "") === basename,
-  );
+  const names = pathIndex(paths).names.get(noteName(direct ?? relative)) ?? [];
   if (names.length === 1 && names[0]) return { kind: "note", path: names[0], anchor };
   if (names.length > 1) return { kind: "ambiguous", paths: names };
   return { kind: "missing", path: missingPath(relative), anchor };
