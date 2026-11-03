@@ -67,41 +67,6 @@ function sanitize(): void {
   });
 }
 
-function validRaster(blob: Blob): Promise<boolean> {
-  return blob
-    .slice(0, 16)
-    .arrayBuffer()
-    .then((buffer) => {
-      const bytes = new Uint8Array(buffer);
-      const png = bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71;
-      const jpeg = bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255;
-      const gif = bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70 && bytes[3] === 56;
-      const webp =
-        bytes[0] === 82 &&
-        bytes[1] === 73 &&
-        bytes[2] === 70 &&
-        bytes[3] === 70 &&
-        bytes[8] === 87 &&
-        bytes[9] === 69 &&
-        bytes[10] === 66 &&
-        bytes[11] === 80;
-      const avif =
-        bytes[4] === 102 &&
-        bytes[5] === 116 &&
-        bytes[6] === 121 &&
-        bytes[7] === 112 &&
-        bytes[8] === 97;
-      return (
-        blob.size <= 20 * 1024 * 1024 &&
-        ((png && blob.type === "image/png") ||
-          (jpeg && blob.type === "image/jpeg") ||
-          (gif && blob.type === "image/gif") ||
-          (webp && blob.type === "image/webp") ||
-          (avif && blob.type === "image/avif"))
-      );
-    });
-}
-
 function taskMarkup(html: string): string {
   return html.replace(
     /<li>\s*(<p>)?\[([ xX])\]\s+/gu,
@@ -214,10 +179,10 @@ export function renderMarkdown(content: string, options: RenderOptions): () => v
     }
     void options
       .asset(target ?? path)
-      .then((blob) => blob && validRaster(blob).then((valid) => ({ blob, valid })))
-      .then((result) => {
-        if (result?.valid && image.isConnected && !disposed) {
-          const url = URL.createObjectURL(result.blob);
+      // Vault.asset() already checked the image signature and size (validImage, assertSize).
+      .then((blob) => {
+        if (blob && image.isConnected && !disposed) {
+          const url = URL.createObjectURL(blob);
           urls.add(url);
           image.src = url;
         }
