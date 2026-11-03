@@ -20,8 +20,12 @@ export async function readWorkspaceNotes(
   return { notes, skipped };
 }
 
-export function skippedNotice(skipped: number): string {
-  return skipped ? ` 읽을 수 없는 노트 ${skipped}개는 건너뛰었습니다.` : "";
+export function skippedNotice(skipped: number, hidden = 0): string {
+  const parts = [
+    skipped ? `읽을 수 없는 노트 ${skipped}개` : "",
+    hidden ? `이름 규칙(? : * 등)에 맞지 않는 파일 ${hidden}개` : "",
+  ].filter(Boolean);
+  return parts.length ? ` ${parts.join("와 ")}는 건너뛰었습니다.` : "";
 }
 
 export function initialWorkspaceNote(notes: ReadonlyMap<string, Note>): Note | undefined {

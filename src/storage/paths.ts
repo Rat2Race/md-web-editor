@@ -18,6 +18,11 @@ export function normalizePath(input: string): string {
   return parts.join("/");
 }
 
+/** Dot-names (.git, .obsidian, .DS_Store) are hidden by convention, so skipping them is not news. */
+export function conventionallyHidden(path: string): boolean {
+  return path.split("/").some((part) => part.startsWith("."));
+}
+
 export function isNotePath(path: string): boolean {
   return noteExtension.test(path);
 }

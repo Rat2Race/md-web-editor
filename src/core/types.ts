@@ -10,6 +10,8 @@ export interface VaultBase {
   readonly id: string;
   readonly name: string;
   readonly entries: readonly VaultEntry[];
+  /** Files left out because their names break the vault path rules. */
+  readonly hidden?: number;
   read(path: string): Promise<FileSnapshot>;
   asset(path: string): Promise<Blob | undefined>;
   file?(path: string): Promise<File | undefined>;

@@ -13,7 +13,14 @@ import {
   scanDirectory,
   validImage,
 } from "./folder-helpers";
-import { importPath, isImagePath, isNotePath, normalizePath, requireNotePath } from "./paths";
+import {
+  conventionallyHidden,
+  importPath,
+  isImagePath,
+  isNotePath,
+  normalizePath,
+  requireNotePath,
+} from "./paths";
 
 export { VaultError } from "./errors";
 
@@ -40,9 +47,14 @@ export async function openFolder(): Promise<Vault> {
 export async function importFolder(files: FileList): Promise<Vault> {
   const imported: Imported[] = [];
   const seen = new Set<string>();
+  let hidden = 0;
   for (const file of Array.from(files)) {
-    const path = importPath(file.webkitRelativePath || file.name);
-    if (!path) continue;
+    const relative = file.webkitRelativePath || file.name;
+    const path = importPath(relative);
+    if (!path) {
+      if (!conventionallyHidden(relative)) hidden += 1;
+      continue;
+    }
     if (seen.has(path))
       throw new VaultError("exists", `The imported folder has two files named ${path}.`);
     seen.add(path);
@@ -50,7 +62,7 @@ export async function importFolder(files: FileList): Promise<Vault> {
       imported.push({ file, path, kind: "note" });
     } else imported.push({ file, path, kind: "asset" });
   }
-  return new ImportVault(`import:${crypto.randomUUID()}`, imported);
+  return new ImportVault(`import:${crypto.randomUUID()}`, imported, hidden);
 }
 
 export async function createDemoVault(): Promise<WritableVault> {
@@ -64,6 +76,7 @@ class FolderVault implements WritableVault {
   readonly kind = "folder" as const;
   readonly name: string;
   entries: readonly VaultEntry[] = [];
+  hidden = 0;
   private closed = false;
 
   constructor(
@@ -112,7 +125,9 @@ class FolderVault implements WritableVault {
 
   async refresh(): Promise<void> {
     this.ensureOpen();
-    this.entries = await scanDirectory(this.root);
+    const scan = await scanDirectory(this.root);
+    this.entries = scan.entries;
+    this.hidden = scan.hidden;
   }
 
   async write(path: string, content: string, expected: string): Promise<FileSnapshot> {
@@ -195,6 +210,7 @@ class ImportVault implements VaultBase {
   constructor(
     readonly id: string,
     private readonly files: readonly Imported[],
+    readonly hidden: number,
   ) {
     this.entries = files.map(({ path, kind, file }) => ({
       path,

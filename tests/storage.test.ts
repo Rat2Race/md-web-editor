@@ -335,9 +335,40 @@ describe("folder scan", () => {
         { kind: "file", name: "locked.md" },
       ]),
     );
-    expect(scan).toEqual([
+    expect(scan.entries).toEqual([
       { path: "locked.md", kind: "note", modified: 0 },
       { path: "ok.md", kind: "note", modified: 5 },
     ]);
+  });
+
+  it("counts names hidden by the path rules except conventional dot-names", async () => {
+    const file = new File(["x"], "x");
+    const scan = await scanDirectory(
+      fakeDirectory([
+        { kind: "file", name: "보통.md", file },
+        { kind: "file", name: "왜?.md", file },
+        { kind: "file", name: ".DS_Store", file },
+        {
+          kind: "directory",
+          name: ".obsidian",
+          children: [{ kind: "file", name: "a.json", file }],
+        },
+        { kind: "directory", name: "a?b", children: [{ kind: "file", name: "c.md", file }] },
+      ]),
+    );
+    expect(scan.entries.map((entry) => entry.path)).toEqual(["보통.md"]);
+    expect(scan.hidden).toBe(2);
+  });
+
+  it("counts imported files hidden by the path rules except conventional dot-names", async () => {
+    const vault = await importFolder(
+      fileList(
+        new File(["# ok"], "ok.md"),
+        new File(["?"], "왜?.md"),
+        new File(["x"], ".DS_Store"),
+      ),
+    );
+    expect(vault.entries.map((entry) => entry.path)).toEqual(["ok.md"]);
+    expect(vault.hidden).toBe(1);
   });
 });

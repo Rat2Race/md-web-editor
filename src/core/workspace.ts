@@ -114,7 +114,7 @@ export class Workspace {
           : vault.kind === "demo"
             ? "예제 공간입니다. 변경 내용은 이 브라우저에만 저장됩니다."
             : "읽기 전용으로 열었습니다. 원본 폴더 자동 저장은 Chrome 또는 Edge를 사용하세요.") +
-          skippedNotice(skipped),
+          skippedNotice(skipped, vault.hidden),
       );
     } finally {
       release();

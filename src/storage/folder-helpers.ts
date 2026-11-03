@@ -1,7 +1,7 @@
 import type { VaultEntry } from "../core/types";
 import { listStored, writeStored } from "./browser-store";
 import { VaultError, vaultError } from "./errors";
-import { isNotePath, normalizePath } from "./paths";
+import { conventionallyHidden, isNotePath, normalizePath } from "./paths";
 
 const queues = new Map<string, Promise<unknown>>();
 
@@ -20,17 +20,23 @@ export async function folderIdentity(handle: FileSystemDirectoryHandle): Promise
 export async function scanDirectory(
   root: FileSystemDirectoryHandle,
   prefix = "",
-): Promise<readonly VaultEntry[]> {
+): Promise<{ readonly entries: readonly VaultEntry[]; readonly hidden: number }> {
   const entries: VaultEntry[] = [];
+  let hidden = 0;
   for await (const handle of root.values()) {
     const path = prefix ? `${prefix}/${handle.name}` : handle.name;
     try {
       normalizePath(path);
     } catch (error) {
-      if (error instanceof VaultError && error.code === "invalid-path") continue;
-      throw error;
+      if (!(error instanceof VaultError && error.code === "invalid-path")) throw error;
+      if (!conventionallyHidden(handle.name)) hidden += 1;
+      continue;
     }
-    if (handle.kind === "directory") entries.push(...(await scanDirectory(handle, path)));
+    if (handle.kind === "directory") {
+      const child = await scanDirectory(handle, path);
+      entries.push(...child.entries);
+      hidden += child.hidden;
+    }
     if (handle.kind === "file") {
       entries.push({
         path,
@@ -39,7 +45,7 @@ export async function scanDirectory(
       });
     }
   }
-  return entries.sort((left, right) => left.path.localeCompare(right.path));
+  return { entries: entries.sort((left, right) => left.path.localeCompare(right.path)), hidden };
 }
 
 // An unreadable file stays listed; reading it later reports the failure for that file only.

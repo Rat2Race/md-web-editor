@@ -117,6 +117,17 @@ describe("Workspace vault loading", () => {
     expect(document.querySelector(".notice")?.textContent).toContain("읽을 수 없는 노트 1개");
   });
 
+  it("adds files hidden by the name rules to the same notice", async () => {
+    const workspace = new Workspace(createShell(document.body));
+    const vault = Object.assign(new FailingReadVault(new VaultError("io", "Too large.")), {
+      hidden: 2,
+    });
+    await workspace.setVault(vault);
+    expect(document.querySelector(".notice")?.textContent).toContain(
+      "읽을 수 없는 노트 1개와 이름 규칙(? : * 등)에 맞지 않는 파일 2개는 건너뛰었습니다.",
+    );
+  });
+
   it("still fails the open on errors that are not vault errors", async () => {
     const workspace = new Workspace(createShell(document.body));
     await expect(workspace.setVault(new FailingReadVault(new TypeError("bug")))).rejects.toThrow(

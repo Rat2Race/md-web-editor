@@ -157,7 +157,7 @@ export async function refreshWorkspace(workspace: Workspace): Promise<void> {
     if (active) workspace.panes.select(active, false);
     workspace.render();
     workspace.panes.updateGraphs();
-    workspace.notice(`폴더의 변경 내용을 확인했습니다.${skippedNotice(skipped)}`);
+    workspace.notice(`폴더의 변경 내용을 확인했습니다.${skippedNotice(skipped, vault.hidden)}`);
   } finally {
     release();
   }
