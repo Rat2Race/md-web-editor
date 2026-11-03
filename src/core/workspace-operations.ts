@@ -5,7 +5,7 @@ import { askText, openDialog } from "../ui/dialog";
 import { element } from "../ui/dom";
 import type { NoteLink } from "./types";
 import type { Workspace } from "./workspace";
-import { readWorkspaceNotes } from "./workspace-data";
+import { readWorkspaceNotes, skippedNotice } from "./workspace-data";
 
 export async function followGraphNode(workspace: Workspace, id: string): Promise<void> {
   const node = workspace.graphData().nodes.find((item) => item.id === id);
@@ -135,7 +135,7 @@ export async function refreshWorkspace(workspace: Workspace): Promise<void> {
   try {
     if (!(await workspace.canLeave())) return;
     await vault.refresh();
-    const next = await readWorkspaceNotes(vault);
+    const { notes: next, skipped } = await readWorkspaceNotes(vault);
     if (token !== workspace.version() || vault !== workspace.vault) return;
     for (const session of [...(sessions?.items.values() ?? [])]) {
       if (next.has(session.path)) {
@@ -157,7 +157,7 @@ export async function refreshWorkspace(workspace: Workspace): Promise<void> {
     if (active) workspace.panes.select(active, false);
     workspace.render();
     workspace.panes.updateGraphs();
-    workspace.notice("폴더의 변경 내용을 확인했습니다.");
+    workspace.notice(`폴더의 변경 내용을 확인했습니다.${skippedNotice(skipped)}`);
   } finally {
     release();
   }

@@ -4,6 +4,7 @@ import { createAutosave, type SaveStatus } from "../src/storage/autosave";
 import { readStored, useMemoryStoreForTesting } from "../src/storage/browser-store";
 import { VaultError } from "../src/storage/errors";
 import { snapshot } from "../src/storage/fingerprint";
+import { scanDirectory } from "../src/storage/folder-helpers";
 import {
   discardDraft,
   discardSpecificDraft,
@@ -296,6 +297,47 @@ describe("autosave", () => {
     await discardSpecificDraft(first);
     await expect(listDrafts("shared-vault")).resolves.toMatchObject([
       expect.objectContaining({ sessionId: "tab-b", content: "second tab" }),
+    ]);
+  });
+});
+
+type FakeEntry =
+  | { readonly kind: "file"; readonly name: string; readonly file?: File }
+  | { readonly kind: "directory"; readonly name: string; readonly children: readonly FakeEntry[] };
+
+function fakeDirectory(children: readonly FakeEntry[]): FileSystemDirectoryHandle {
+  const handle = (entry: FakeEntry) =>
+    entry.kind === "directory"
+      ? { ...fakeDirectory(entry.children), kind: "directory", name: entry.name }
+      : {
+          kind: "file",
+          name: entry.name,
+          getFile: async () => {
+            if (!entry.file) throw new DOMException("Locked by the OS.", "NotReadableError");
+            return entry.file;
+          },
+        };
+  const directory = {
+    kind: "directory",
+    name: "root",
+    async *values() {
+      for (const child of children) yield handle(child);
+    },
+  };
+  return directory as unknown as FileSystemDirectoryHandle;
+}
+
+describe("folder scan", () => {
+  it("keeps listing a folder when one file cannot be read", async () => {
+    const scan = await scanDirectory(
+      fakeDirectory([
+        { kind: "file", name: "ok.md", file: new File(["# ok"], "ok.md", { lastModified: 5 }) },
+        { kind: "file", name: "locked.md" },
+      ]),
+    );
+    expect(scan).toEqual([
+      { path: "locked.md", kind: "note", modified: 0 },
+      { path: "ok.md", kind: "note", modified: 5 },
     ]);
   });
 });

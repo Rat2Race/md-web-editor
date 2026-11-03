@@ -5,7 +5,7 @@ import { renderWorkspace } from "../ui/workspace-view";
 import { buildGraph } from "./graph-data";
 import { Sessions } from "./sessions";
 import type { EditorMode, Note, NoteLink, Vault } from "./types";
-import { initialWorkspaceNote, readWorkspaceNotes } from "./workspace-data";
+import { initialWorkspaceNote, readWorkspaceNotes, skippedNotice } from "./workspace-data";
 import { createWorkspaceNote, followWorkspaceLink, refreshWorkspace } from "./workspace-operations";
 import { WorkspacePanes } from "./workspace-panes";
 export class Workspace {
@@ -65,8 +65,9 @@ export class Workspace {
       const revisions = this.sessions?.revisions() ?? new Map<string, number>();
       this.notice("폴더를 로컬에서 읽고 있습니다…");
       let notes: Map<string, Note>;
+      let skipped: number;
       try {
-        notes = await readWorkspaceNotes(vault);
+        ({ notes, skipped } = await readWorkspaceNotes(vault));
       } catch (cause: unknown) {
         vault.close();
         throw cause;
@@ -108,11 +109,12 @@ export class Workspace {
       }
       if (token !== this.generation) return;
       this.notice(
-        vault.kind === "folder"
+        (vault.kind === "folder"
           ? "로컬 폴더를 열었습니다. 변경 내용은 원본 파일에 자동 저장됩니다."
           : vault.kind === "demo"
             ? "예제 공간입니다. 변경 내용은 이 브라우저에만 저장됩니다."
-            : "읽기 전용으로 열었습니다. 원본 폴더 자동 저장은 Chrome 또는 Edge를 사용하세요.",
+            : "읽기 전용으로 열었습니다. 원본 폴더 자동 저장은 Chrome 또는 Edge를 사용하세요.") +
+          skippedNotice(skipped),
       );
     } finally {
       release();

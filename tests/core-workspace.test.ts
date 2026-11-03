@@ -24,6 +24,7 @@ vi.mock("../src/ui/workspace-view", () => ({ renderWorkspace: () => undefined })
 import { Sessions } from "../src/core/sessions";
 import { Workspace } from "../src/core/workspace";
 import { useMemoryStoreForTesting } from "../src/storage/browser-store";
+import { VaultError } from "../src/storage/errors";
 import { createShell } from "../src/ui/shell";
 
 class DelayedReadVault implements WritableVault {
@@ -93,5 +94,33 @@ describe("Workspace open", () => {
 
     expect(sessions.active).toBe("two.md");
     expect(saveDialog).not.toHaveBeenCalled();
+  });
+});
+
+class FailingReadVault extends DelayedReadVault {
+  constructor(private readonly failure: Error) {
+    super("failing-read");
+  }
+  override async read(path: string): Promise<FileSnapshot> {
+    if (path === "two.md") throw this.failure;
+    return { content: path, fingerprint: path };
+  }
+}
+
+describe("Workspace vault loading", () => {
+  it("opens the vault without notes it cannot read and says how many it skipped", async () => {
+    const workspace = new Workspace(createShell(document.body));
+    await workspace.setVault(
+      new FailingReadVault(new VaultError("io", "Note two.md exceeds the 10 MiB limit.")),
+    );
+    expect([...workspace.notes.keys()]).toEqual(["one.md"]);
+    expect(document.querySelector(".notice")?.textContent).toContain("읽을 수 없는 노트 1개");
+  });
+
+  it("still fails the open on errors that are not vault errors", async () => {
+    const workspace = new Workspace(createShell(document.body));
+    await expect(workspace.setVault(new FailingReadVault(new TypeError("bug")))).rejects.toThrow(
+      "bug",
+    );
   });
 });

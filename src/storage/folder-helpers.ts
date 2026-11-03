@@ -32,15 +32,24 @@ export async function scanDirectory(
     }
     if (handle.kind === "directory") entries.push(...(await scanDirectory(handle, path)));
     if (handle.kind === "file") {
-      const file = await handle.getFile();
       entries.push({
         path,
         kind: isNotePath(path) ? "note" : "asset",
-        modified: file.lastModified,
+        modified: await lastModified(handle),
       });
     }
   }
   return entries.sort((left, right) => left.path.localeCompare(right.path));
+}
+
+// An unreadable file stays listed; reading it later reports the failure for that file only.
+async function lastModified(handle: FileSystemFileHandle): Promise<number> {
+  try {
+    return (await handle.getFile()).lastModified;
+  } catch (error) {
+    if (error instanceof DOMException) return 0;
+    throw error;
+  }
 }
 
 export async function readFile(root: FileSystemDirectoryHandle, path: string): Promise<File> {
