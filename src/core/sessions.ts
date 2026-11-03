@@ -19,7 +19,6 @@ export class Sessions {
   activeView = "";
   mode: EditorMode = "live";
   private readonly loads = new Map<string, Promise<LoadedDocument | undefined>>();
-  private legacyGeneration = 0;
   private holds = 0;
   private destroyed = false;
   private readonly persistence: SessionPersistence;
@@ -103,21 +102,6 @@ export class Sessions {
     return true;
   }
 
-  async open(path: string): Promise<boolean> {
-    const token = ++this.legacyGeneration;
-    if (!(await this.flush()) || token !== this.legacyGeneration) return false;
-    const id = `legacy:${path}`;
-    const view = await this.ensureView(path, id);
-    if (token !== this.legacyGeneration) {
-      await this.closeView(id);
-      return false;
-    }
-    this.activateView(id);
-    for (const candidate of this.views.values()) candidate.host.hidden = candidate.id !== id;
-    view.editor.focus();
-    return true;
-  }
-
   async flush(): Promise<boolean> {
     return flushSessions(this.items);
   }
@@ -167,7 +151,6 @@ export class Sessions {
 
   destroy(): void {
     this.destroyed = true;
-    this.legacyGeneration += 1;
     for (const view of [...this.views.values()]) this.removeView(view);
     for (const session of this.items.values()) session.save?.dispose();
     this.items.clear();

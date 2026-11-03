@@ -172,6 +172,11 @@ function createSessions(vault: WritableVault): Sessions {
   });
 }
 
+async function openView(sessions: Sessions, path: string): Promise<boolean> {
+  await sessions.ensureView(path, path);
+  return sessions.activateView(path);
+}
+
 describe("Sessions async safety", () => {
   beforeEach(() => {
     harness.editors.clear();
@@ -186,7 +191,7 @@ describe("Sessions async safety", () => {
     const vault = new BarrierVault("reload", { "one.md": "disk base" });
     const sessions = createSessions(vault);
     journal.readDraft.mockResolvedValue(undefined);
-    await sessions.open("one.md");
+    await openView(sessions, "one.md");
     vault.pauseNextRead("one.md");
 
     const reload = sessions.reload("one.md");
@@ -196,25 +201,6 @@ describe("Sessions async safety", () => {
 
     await expect(reload).resolves.toBe(false);
     expect(harness.editors.get("one.md")?.getContent()).toBe("new local text");
-  });
-
-  it("opens only the newest tab when overlapping file reads resolve out of order", async () => {
-    const vault = new BarrierVault("open", { "one.md": "one", "two.md": "two" });
-    const sessions = createSessions(vault);
-    journal.readDraft.mockResolvedValue(undefined);
-    vault.pauseNextRead("one.md");
-    const first = sessions.open("one.md");
-    await vi.waitFor(() => expect(vault.waiting("one.md")).toBe(1));
-    vault.pauseNextRead("two.md");
-    const second = sessions.open("two.md");
-    await vi.waitFor(() => expect(vault.waiting("two.md")).toBe(1));
-    vault.releaseRead("two.md");
-    await expect(second).resolves.toBe(true);
-    vault.releaseRead("one.md");
-
-    await expect(first).resolves.toBe(false);
-    expect(sessions.active).toBe("two.md");
-    expect([...sessions.items.keys()]).toEqual(["two.md"]);
   });
 
   it("retains a recovery draft when the recovery dialog is dismissed", async () => {
@@ -229,7 +215,7 @@ describe("Sessions async safety", () => {
       savedAt: 1,
     });
 
-    const opening = sessions.open("one.md");
+    const opening = openView(sessions, "one.md");
     await vi.waitFor(() => expect(harness.dialogs).toHaveLength(1));
     harness.dialogs.at(-1)?.close();
     await expect(opening).resolves.toBe(true);
@@ -250,7 +236,7 @@ describe("Sessions async safety", () => {
     };
     journal.readDraft.mockResolvedValue(draft);
 
-    const opening = sessions.open("one.md");
+    const opening = openView(sessions, "one.md");
     await vi.waitFor(() => expect(harness.bodies).toHaveLength(1));
     [...(harness.bodies[0]?.querySelectorAll("button") ?? [])]
       .find((button) => button.textContent === "복구본 열기")
@@ -274,7 +260,7 @@ describe("Sessions async safety", () => {
     const vault = new BarrierVault("hold", { "one.md": "disk base" });
     const sessions = createSessions(vault);
     journal.readDraft.mockResolvedValue(undefined);
-    await sessions.open("one.md");
+    await openView(sessions, "one.md");
 
     const release = sessions.hold();
     expect(harness.editors.get("one.md")?.readonly).toBe(true);
@@ -287,8 +273,8 @@ describe("Sessions async safety", () => {
     const vault = new BarrierVault("flush", { "one.md": "one", "two.md": "two" });
     const sessions = createSessions(vault);
     journal.readDraft.mockResolvedValue(undefined);
-    await sessions.open("one.md");
-    await sessions.open("two.md");
+    await openView(sessions, "one.md");
+    await openView(sessions, "two.md");
     const first = sessions.items.get("one.md")?.save;
     const second = sessions.items.get("two.md")?.save;
     const firstFlush = vi.fn(async () => false);
@@ -314,7 +300,7 @@ describe("Sessions async safety", () => {
       onLink,
     });
     journal.readDraft.mockResolvedValue(undefined);
-    await sessions.open("one.md");
+    await openView(sessions, "one.md");
 
     harness.editors.get("one.md")?.options.onLink("other.md", "markdown");
 
@@ -333,7 +319,7 @@ describe("Sessions async safety", () => {
       savedAt: 1,
     });
 
-    const opening = sessions.open("one.md");
+    const opening = openView(sessions, "one.md");
     await vi.waitFor(() => expect(harness.bodies).toHaveLength(1));
     const recover = [...(harness.bodies[0]?.querySelectorAll("button") ?? [])].find(
       (button) => button.textContent === "복구본 열기",
