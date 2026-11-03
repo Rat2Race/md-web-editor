@@ -36,14 +36,8 @@ export async function listDrafts(vaultId: string): Promise<readonly Draft[]> {
   });
 }
 
-export const listDraft = listDrafts;
-
 export async function discardDraft(vaultId: string, path: string): Promise<void> {
   await deleteStored("drafts", key(vaultId, path, draftSessionId));
-}
-
-export async function discardDraftRevision(draft: Draft): Promise<void> {
-  await discardSpecificDraft(draft);
 }
 
 export async function discardSpecificDraft(draft: Draft): Promise<void> {

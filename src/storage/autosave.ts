@@ -1,6 +1,6 @@
 import type { FileSnapshot, WritableVault } from "../core/types";
 import { VaultError } from "./errors";
-import { type Draft, discardDraftRevision, draftSessionId, writeDraft } from "./journal";
+import { type Draft, discardSpecificDraft, draftSessionId, writeDraft } from "./journal";
 
 export type SaveStatus = {
   readonly kind: "saved" | "pending" | "saving" | "conflict" | "error";
@@ -113,7 +113,7 @@ class AutosaveController implements Autosave {
       this.current = saved;
       this.savedRevision = targetRevision;
       if (this.revision === targetRevision) {
-        await discardDraftRevision(draft);
+        await discardSpecificDraft(draft);
         this.emit({ kind: "saved" });
       } else {
         const retained = this.draft();
