@@ -431,6 +431,30 @@ describe("CodeMirror editor modes", () => {
     editor.destroy();
   });
 
+  it("keeps CRLF line endings for typed, pasted, and synced text", () => {
+    const parent = document.createElement("main");
+    const changes: string[] = [];
+    const editor = createEditor({
+      parent,
+      content: "a\r\nb",
+      readonly: false,
+      mode: "source",
+      path: "note.md",
+      onChange: (content) => changes.push(content),
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const view = liveView(parent);
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "x" } });
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "\nX" } });
+    expect(changes).toEqual(["a\r\nbx", "a\r\nbx\r\nX"]);
+    editor.syncContent("a\r\nb\r\nc");
+    expect(view.state.doc.lines).toBe(3);
+    expect(editor.getContent()).toBe("a\r\nb\r\nc");
+    editor.destroy();
+  });
+
   it("reuses inactive preview widgets when typing shifts them", () => {
     const parent = document.createElement("main");
     let assetCalls = 0;

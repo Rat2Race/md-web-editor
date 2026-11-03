@@ -66,6 +66,10 @@ export function createEditor(options: EditorOptions): NoteEditor {
   let currentPath = options.path;
   let isReadonly = options.readonly;
   let replacingDocument = false;
+  // CodeMirror keeps "\n" internally; a note that arrived with CRLF is written back with CRLF.
+  let crlf = options.content.includes("\r\n");
+  const text = (value: EditorState): string =>
+    crlf ? value.doc.toString().replaceAll("\n", "\r\n") : value.doc.toString();
   let releaseReading: () => void = () => undefined;
   const shell = document.createElement("section");
   shell.className = "note-editor";
@@ -85,8 +89,7 @@ export function createEditor(options: EditorOptions): NoteEditor {
         autocompletion({ override: [wikiCompletion(options)] }),
         wikiCanonicalization(() => currentPath, options.completions),
         EditorView.updateListener.of((update) => {
-          if (update.docChanged && !replacingDocument)
-            options.onChange(update.state.doc.toString());
+          if (update.docChanged && !replacingDocument) options.onChange(text(update.state));
         }),
         modeCompartment.of(
           currentMode === "live"
@@ -162,6 +165,7 @@ export function createEditor(options: EditorOptions): NoteEditor {
   return {
     setDocument(content, path) {
       currentPath = path;
+      crlf = content.includes("\r\n");
       replacingDocument = true;
       view.setState(state(content));
       replacingDocument = false;
@@ -169,7 +173,11 @@ export function createEditor(options: EditorOptions): NoteEditor {
       if (currentMode === "reading") showReading();
     },
     syncContent(content) {
-      const changes = minimalContentChange(view.state.doc.toString(), content);
+      crlf = content.includes("\r\n");
+      const changes = minimalContentChange(
+        view.state.doc.toString(),
+        content.replaceAll("\r\n", "\n"),
+      );
       if (!changes) return;
       replacingDocument = true;
       view.dispatch({ changes, annotations: Transaction.addToHistory.of(false) });
@@ -183,7 +191,7 @@ export function createEditor(options: EditorOptions): NoteEditor {
       view.dispatch({ effects: readonlyCompartment.reconfigure(readonlyExtension(value)) });
     },
     getContent() {
-      return view.state.doc.toString();
+      return text(view.state);
     },
     focus() {
       view.focus();
