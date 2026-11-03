@@ -9,7 +9,10 @@ export function bindAppActions(app: Workspace) {
     app.run(async () => {
       if (!(await app.canLeave())) return;
       if ("showDirectoryPicker" in window) await app.setVault(await openFolder());
-      else fallback.click();
+      else {
+        app.notice("이 브라우저는 원본 폴더 저장을 지원하지 않아 읽기 전용으로 엽니다.");
+        fallback.click();
+      }
     });
   const demo = () =>
     app.run(async () => {
