@@ -28,11 +28,13 @@ function selected(state: EditorState, block: Block): boolean {
   return range.from <= block.to && range.to >= block.from;
 }
 
+// A widget whose eq() holds keeps its old DOM and listeners, so handlers read positions
+// and context from the live view at event time instead of from the widget that drew them.
 class PreviewWidget extends WidgetType {
   constructor(
-    private readonly from: number,
     private readonly content: string,
     private readonly context: MarkdownContext,
+    private readonly latest: (state: EditorState) => MarkdownContext,
     private readonly options: LiveOptions,
   ) {
     super();
@@ -42,8 +44,7 @@ class PreviewWidget extends WidgetType {
     return (
       other instanceof PreviewWidget &&
       other.content === this.content &&
-      other.from === this.from &&
-      other.context === this.context
+      other.context.key === this.context.key
     );
   }
 
@@ -74,17 +75,17 @@ class PreviewWidget extends WidgetType {
         return;
       event.preventDefault();
       event.stopPropagation();
-      view.dispatch({ selection: { anchor: this.from } });
+      view.dispatch({ selection: { anchor: view.posAtDOM(root) } });
       view.focus();
     });
     const offsets = taskOffsets(this.content);
     root.querySelectorAll<HTMLElement>(".task-checkbox").forEach((box, index) => {
       box.tabIndex = this.options.writable() ? 0 : -1;
-      box.addEventListener("click", () => this.toggle(view, offsets[index]));
+      box.addEventListener("click", () => this.toggle(view, root, offsets[index]));
       box.addEventListener("keydown", (event) => {
         if (event.key === " " || event.key === "Enter") {
           event.preventDefault();
-          this.toggle(view, offsets[index]);
+          this.toggle(view, root, offsets[index]);
         }
       });
     });
@@ -96,9 +97,9 @@ class PreviewWidget extends WidgetType {
     dom.dispatchEvent(new Event("DOMNodeRemoved"));
   }
 
-  private toggle(view: EditorView, offset: number | undefined): void {
+  private toggle(view: EditorView, root: HTMLElement, offset: number | undefined): void {
     if (!this.options.writable() || offset === undefined) return;
-    const position = this.from + offset;
+    const position = view.posAtDOM(root) + offset;
     const value = view.state.sliceDoc(position, position + 1);
     view.dispatch({
       changes: {
@@ -110,7 +111,7 @@ class PreviewWidget extends WidgetType {
   }
 
   private goToFootnote(view: EditorView, id: string): void {
-    const position = this.context.footnotes.get(id);
+    const position = this.latest(view.state).footnotes.get(id);
     if (position === undefined) return;
     view.dispatch({
       selection: { anchor: position },
@@ -130,19 +131,15 @@ function activeBlock(state: EditorState): string {
 function decorations(
   state: EditorState,
   options: LiveOptions,
-  context: MarkdownContext,
+  latest: (state: EditorState) => MarkdownContext,
 ): DecorationSet {
+  const context = latest(state);
   const ranges = blocks(state)
     .filter((block) => !selected(state, block))
     .map((block) =>
       Decoration.replace({
         block: true,
-        widget: new PreviewWidget(
-          block.from,
-          state.sliceDoc(block.from, block.to),
-          context,
-          options,
-        ),
+        widget: new PreviewWidget(state.sliceDoc(block.from, block.to), context, latest, options),
       }).range(block.from, block.to),
     );
   return Decoration.set(ranges, true);
@@ -161,7 +158,7 @@ export function livePreview(options: LiveOptions) {
   const field = StateField.define<LiveState>({
     create(state) {
       return {
-        decorations: decorations(state, options, cachedContext(state)),
+        decorations: decorations(state, options, cachedContext),
         active: activeBlock(state),
       };
     },
@@ -169,7 +166,7 @@ export function livePreview(options: LiveOptions) {
       const active = activeBlock(transaction.state);
       if (!transaction.docChanged && active === _value.active) return _value;
       return {
-        decorations: decorations(transaction.state, options, cachedContext(transaction.state)),
+        decorations: decorations(transaction.state, options, cachedContext),
         active,
       };
     },

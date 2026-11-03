@@ -5,6 +5,13 @@ import { EditorView } from "@codemirror/view";
 import { describe, expect, it } from "vitest";
 import { createEditor } from "../src/editor/editor";
 
+function liveView(parent: HTMLElement): EditorView {
+  const surface = parent.querySelector<HTMLElement>(".cm-editor");
+  const view = surface ? EditorView.findFromDOM(surface) : null;
+  if (!view) throw new Error("Test editor view is missing.");
+  return view;
+}
+
 describe("CodeMirror editor modes", () => {
   it("mirrors content without a save callback or a history reset", () => {
     const parent = document.createElement("main");
@@ -421,6 +428,72 @@ describe("CodeMirror editor modes", () => {
     });
     editor.goToLine(2);
     expect(assetCalls).toBe(1);
+    editor.destroy();
+  });
+
+  it("reuses inactive preview widgets when typing shifts them", () => {
+    const parent = document.createElement("main");
+    let assetCalls = 0;
+    const editor = createEditor({
+      parent,
+      content: "intro\n\n![image](asset.png)\n\nend",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => {
+        assetCalls += 1;
+        return undefined;
+      },
+      completions: () => [],
+    });
+    const view = liveView(parent);
+    for (let i = 0; i < 3; i += 1)
+      view.dispatch({
+        changes: { from: 0, insert: "x" },
+        annotations: Transaction.userEvent.of("input.type"),
+      });
+    expect(assetCalls).toBe(1);
+    editor.destroy();
+  });
+
+  it("toggles the clicked task after text above it moves", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "intro\n\n- [ ] task",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    liveView(parent).dispatch({ changes: { from: 0, insert: "abc" } });
+    parent.querySelector<HTMLElement>(".task-checkbox")?.click();
+    expect(editor.getContent()).toBe("abcintro\n\n- [x] task");
+    editor.destroy();
+  });
+
+  it("jumps to the current footnote definition after text above it moves", () => {
+    const parent = document.createElement("main");
+    const editor = createEditor({
+      parent,
+      content: "# Active\n\nfootnote[^1]\n\n[^1]: definition",
+      readonly: false,
+      mode: "live",
+      path: "note.md",
+      onChange: () => undefined,
+      onLink: () => undefined,
+      asset: async () => undefined,
+      completions: () => [],
+    });
+    const view = liveView(parent);
+    view.dispatch({ changes: { from: 0, insert: "abc" } });
+    parent.querySelector<HTMLElement>("[data-md-footnote='1']")?.click();
+    expect(view.state.selection.main.head).toBe(view.state.doc.toString().indexOf("[^1]:"));
     editor.destroy();
   });
 

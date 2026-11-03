@@ -17,6 +17,8 @@ enableFootnotes();
 export type MarkdownContext = {
   readonly environment: Env;
   readonly footnotes: ReadonlyMap<string, number>;
+  /** Equal keys render identically: references and footnote labels, not positions. */
+  readonly key: string;
 };
 
 export function markdownContext(content: string): MarkdownContext {
@@ -36,7 +38,8 @@ export function markdownContext(content: string): MarkdownContext {
     }
     if (token.type === "footnote_close") label = undefined;
   }
-  return { environment, footnotes };
+  const key = JSON.stringify([parsed.references ?? null, [...footnotes.keys()]]);
+  return { environment, footnotes, key };
 }
 
 export const markdownHtml = (content: string, environment?: Env): string =>
