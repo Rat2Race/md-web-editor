@@ -15,5 +15,6 @@ This is the source-of-truth index. Keep pages small, link decisions to implement
 - [0.3.0 release and acceptance](releases/0.3.0.md)
 - [Installed offline application](decisions/005-install-offline.md)
 - [0.4.0 release and acceptance](releases/0.4.0.md)
+- [Audit fixes: before and after](audit-fixes-before-after.md)
 
 All examples and QA notes are synthetic. Source notes stay on the user's device. Git tracks the application and this wiki only.
